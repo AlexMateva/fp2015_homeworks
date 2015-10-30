@@ -1,0 +1,57 @@
+#include "stdafx.h"
+#include <iostream>
+#include "string.h"
+using namespace std;
+
+
+
+
+int _tmain(int argc, _TCHAR* argv[])
+{
+  double curX;
+  double curY;
+  int maxS;
+  cout  << "Please, enter values for x-begin  : "; cin >> curX ;
+  cout  << "Please, enter values for y-begin  : "; cin >> curY;
+  cout  << "Please, enter number of the steps : "; cin >> maxS; 
+  char* string = new char[maxS + 1];
+
+  cout  << "Please, enter steps  as expected  : "; 
+  cin.ignore();
+  cin.getline(string, maxS+1, '\n');
+  cout << string << endl;
+
+  size_t len = strlen(string); 
+  int count = 0;
+  for(size_t i = 0; i < len ;i++)
+  {
+    if(string[i]=='~')
+      count++;
+
+   if(count%2==0)
+   {
+    if(string[i]=='>')
+      curX++;
+    else if (string[i]=='<')
+      curX--;
+    else if(string[i]=='^')
+      curY--;
+    else if(string[i]=='v')
+      curY++;
+   }
+   else
+   {
+   if(string[i]=='>')
+      curX--;
+    else if (string[i]=='<')
+      curX++;
+    else if(string[i]=='^')
+      curY++;
+    else if(string[i]=='v')
+      curY--;
+   }
+  }
+  cout << "(" << curX << ", " << curY << ")"<<endl;
+  delete [] string;
+	return 0;
+}
