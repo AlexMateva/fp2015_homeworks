@@ -1,0 +1,25 @@
+#lang racket
+
+ (define (product-digits n)
+  (cond
+    [(zero? n) 1]
+    [else (* (remainder n 10) (product-digits  (quotient n 10)))]))
+
+
+(define (circle? circle-x circle-y radius point-x point-y)
+  (>= (* radius radius) (+ (* (- point-x circle-x) (- point-x circle-x))  (* (- point-y circle-y) (- point-y circle-y)))))
+
+
+(define (area a b c)
+  (sqrt (* (/ (+ a b c) 2) (- (/ (+ a b c) 2) a) (- (/ (+ a b c) 2) b)  (- (/ (+ a b c) 2) c))))
+
+(define (is-not-divisible-by<=i i m)
+  (cond
+    [(= i 1) true]
+    [else (cond
+            [(= (remainder m i) 0) false]
+            [else (is-not-divisible-by<=i (sub1 i) m)])]))
+(is-not-divisible-by<=i 3 6)
+(is-not-divisible-by<=i 6 7) 
+(define (prime? n)
+  (is-not-divisible-by<=i (sub1 n) n))
