@@ -1,0 +1,10 @@
+#lang racket
+(define (string-repeat str n)
+  (define (helper str i res)
+    (if (= (- n 1) i)
+        res
+        (helper str (+ i 1) (string-append str res))))
+  (helper str 0 str))
+
+
+        
