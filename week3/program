@@ -1,0 +1,64 @@
+#lang racket
+(require "math.rkt")
+
+(define (main)
+  (println (square 2)))
+
+(main)
+
+
+(define (nth-beast-number n)
+(define (helper res i)
+  (if (= n i)
+      res
+      (helper (+ res (* 666 (expt 10 (* i 3)))) (+ i 1))))
+ 
+(if (= n 0)
+    1
+     (helper 666 1)))
+
+
+(define (last-digit n)
+(remainder n 10)
+  )
+
+
+(define (reverse-int n)
+  (define (rev-iter n result)
+    (cond [(= n 0) result]
+          [else (rev-iter (quotient n 10) (+ (* result 10) (last-digit n)))]))
+  (rev-iter n 0))
+
+
+(define (palindrome? n)
+  (= n (reverse-int n)))
+
+(define (toBinary n)
+  (string->number (number->string n 2)))
+
+
+(define (occurrences a n)
+  (define (occ-iter n result)
+    (cond [(= n 0) result]
+          [(= (remainder n 10) a) (occ-iter (quotient n 10) (+ result 1))]
+          [else (occ-iter (quotient n 10) result)]))
+  (occ-iter n 0))
+
+
+(define (next-hack n)
+  (if (= (remainder (occurrences 1 (toBinary (+ n 1))) 2) 0)
+      (next-hack (+ n 1))
+      (if (palindrome? (toBinary (+ n 1)))
+          (+ n 1)
+          (next-hack (+ n 1)))))
+ 
+
+(define (p-score n)
+(define (helper new res)
+  (if (palindrome? new)
+      (+ res 1)
+      (helper (+ new (reverse-int new)) (+ res 1))))
+  (helper n 0))
+      
+      
+          
