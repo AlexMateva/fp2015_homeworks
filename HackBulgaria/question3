@@ -1,0 +1,418 @@
+#include <string>
+#include <algorithm>
+
+#include <iostream>
+#include <fstream>
+
+#include <vector>
+#include <map>
+
+using namespace std;
+
+typedef vector<string> STRLIST;
+
+class DependenciesResolver
+{
+public:
+
+enum PARSE_ALL_DEP_STATES
+{
+  BEGIN,
+  START_PACKET,
+  READ_PACKET_NAME,
+  SAVE_PACKET_NAME,
+  READ_PACKET_DEPS,
+  BEFORE_DEP_NAME,
+  READ_DEP,
+  DEPEND_SAVE,
+  END_PACKET_DEP,
+  END
+};
+
+enum PARSE_PRJ_STATES
+{
+    BEGIN_PARSE_PRJ,
+    START_PRJ_KW,
+    READ_PRJ_KW,
+    CHECK_PRJ_KW,
+    START_PRJ_NAME,
+    READ_PRJ_NAME,
+    SAVE_PRJ_NAME,
+    START_DEP_KW,
+    READ_DEP_KW,
+    CHECK_DEP_KW,
+    ENTER_PRJ_DEP,
+    START_PRJ_DEP,
+    READ_ONE_PRJ_DEP,
+    SAVE_ONE_PRJ_DEP,
+    END_PRJ,
+    END_PARS_PRJ
+};
+
+  DependenciesResolver () : state(BEGIN), prj_state(BEGIN_PARSE_PRJ) {};
+  ~DependenciesResolver() {}
+
+  void parse (char c);
+  void parseDep (char c);
+  void loadInstalledPackagesInfo ();
+  void loadAllPackagesInfo ();
+  void loadAllPrjPackagesInfo ();
+  STRLIST lstInstalledPackages;
+  STRLIST lstProjectPackages;
+
+  map<string, STRLIST > mapAllPAckagesInfo;
+  PARSE_ALL_DEP_STATES state;
+  PARSE_PRJ_STATES    prj_state;
+
+  string lastword;
+  void trace ();
+};
+
+
+/*
+BEGIN_PARSE_PRJ   {     => START_PRJ_KW
+START_PRJ_KW      "     => READ_PRJ_KW
+READ_PRJ_KW       "     => CHECK_PRJ_KW // is "projectName"
+CHECK_PRJ_KW     false  => END
+CHECK_PRJ_KW      :     => START_PRJ_NAME
+START_PRJ_NAME    "     => READ_PRJ_NAME
+READ_PRJ_NAME     "     => SAVE_PRJ_NAME
+SAVE_PRJ_NAME     ,     => START_DEP_KW
+START_DEP_KW      "     => READ_DEP_KW
+READ_DEP_KW       "     => CHECK_DEP_KW // is "dependencies"
+CHECK_DEP_KW     false  => END
+CHECK_DEP_KW      :     => ENTER_PRJ_DEP
+ENTER_PRJ_DEP     [     => START_PRJ_DEP
+START_PRJ_DEP     "     => READ_ONE_PRJ_DEP
+READ_ONE_PRJ_DEP  "     => SAVE_ONE_PRJ_DEP
+SAVE_ONE_PRJ_DEP  ,     => START_PRJ_DEP
+SAVE_ONE_PRJ_DEP  ]     => END_PRJ
+END_PRJ           ,     => START_PRJ_KW
+END_PRJ           }     => END_PARS_PRJ
+
+
+*/
+// fills lstProjectPackages
+void DependenciesResolver::parseDep (char c)
+{
+
+  static STRLIST lst;
+  switch (prj_state)
+  {
+    case BEGIN_PARSE_PRJ :
+        if (c == '{') prj_state  = START_PRJ_KW;
+    break;
+
+    case START_PRJ_KW:
+    {
+        if (c == '"') prj_state  = READ_PRJ_KW;
+        lastword = "";
+    }
+    break;
+
+    case READ_PRJ_KW:
+    {
+        if (c == '"') prj_state  = CHECK_PRJ_KW;
+        else lastword += c;
+    }
+    break;
+
+    case CHECK_PRJ_KW:
+    {
+        if (lastword != "projectName")  prj_state  =  END_PARS_PRJ ;
+        else if (c == ':')              prj_state  =  START_PRJ_NAME;
+
+    }
+    break;
+
+    case START_PRJ_NAME:
+    {
+        lastword = "";
+        if (c == '"') prj_state  = READ_PRJ_NAME;
+    }
+    break;
+
+    case READ_PRJ_NAME:
+        if (c == '"') prj_state  = SAVE_PRJ_NAME;
+    break;
+
+    case SAVE_PRJ_NAME:
+        if (c == ',') prj_state  = START_DEP_KW;
+    break;
+
+    case START_DEP_KW:
+        if (c == '"')
+        {
+            prj_state  = READ_DEP_KW;
+            lastword = "";
+        }
+    break;
+
+    case READ_DEP_KW:
+        if (c == '"')
+        {
+            if (lastword  != "dependencies") prj_state = END_PARS_PRJ ;
+            else                             prj_state = CHECK_DEP_KW;
+            lastword  = "";
+        }
+        else
+            lastword += c;
+    break;
+
+    case CHECK_DEP_KW:
+        if (c == ':') prj_state  = ENTER_PRJ_DEP;
+    break;
+
+    case ENTER_PRJ_DEP:
+        if (c == '[') prj_state  = START_PRJ_DEP;
+    break;
+
+    case START_PRJ_DEP:
+    {
+        lastword  = "";
+        if (c == '"') prj_state  = READ_ONE_PRJ_DEP;
+    }
+    break;
+
+    case READ_ONE_PRJ_DEP:
+        if (c == '"')
+            prj_state  = SAVE_ONE_PRJ_DEP;
+        else
+            lastword  += c;
+    break;
+
+    case SAVE_ONE_PRJ_DEP:
+    {
+        lstProjectPackages.push_back(lastword);
+        lastword = "";
+        if (c == ',') prj_state  = START_PRJ_DEP;
+        else if (c == ']') prj_state  = END_PRJ;
+    }
+    break;
+
+    case END_PRJ:
+        if (c == ',') prj_state  = START_PRJ_KW;
+        else if (c == '}') prj_state  = END_PARS_PRJ;
+    break;
+
+    case END_PARS_PRJ:
+    break;
+  }
+}
+/*
+
+BEGIN            {  => START_PACKET
+START_PACKET     "  => READ_PACKET_NAME
+READ_PACKET_NAME "  => SAVE_PACKET_NAME
+SAVE_PACKET_NAME :  => READ_PACKET_DEPS
+
+READ_PACKET_DEPS [  => BEFORE_DEP_NAME
+BEFORE_DEP_NAME  "  => READ_DEP
+BEFORE_DEP_NAME  ]  => END_PACKET_DEP
+READ_DEP         "  => DEPEND_SAVE
+DEPEND_SAVE      ,  => BEFORE_DEP_NAME
+DEPEND_SAVE      ]  => END_PACKET_DEP
+END_PACKET_DEP   ,  => START_PACKET
+END_PACKET_DEP   }  => END
+*/
+
+
+
+void DependenciesResolver::parse (char c)
+{
+  static string packet = "";
+  static string dep = "";
+  static STRLIST lst;
+  switch (state)
+  {
+    case BEGIN :
+      if (c == '{')
+      {
+        state = START_PACKET;
+        packet = "";
+        lst.clear();
+      }
+    break;
+
+    case START_PACKET:
+      if (c == '"')
+      {
+        state = READ_PACKET_NAME;
+        lastword = "";
+      }
+      break;
+
+    case READ_PACKET_NAME:
+      if (c == '"')
+      {
+        state = SAVE_PACKET_NAME;
+        packet = lastword;
+        lastword = "";
+      }
+      else
+      {
+        lastword += c;
+      }
+      break;
+
+    case SAVE_PACKET_NAME:
+
+      if (c == ':')
+        state  = READ_PACKET_DEPS;
+      break;
+
+    case READ_PACKET_DEPS:
+      if (c == '[')
+         state  = BEFORE_DEP_NAME;
+      break;
+
+    case BEFORE_DEP_NAME:
+      if (c == '"')
+      {
+        state = READ_DEP;
+        lastword = "";
+      }
+      else if (c == ']')
+      {
+        state = END_PACKET_DEP;
+      }
+      break;
+
+    case READ_DEP:
+      if (c == '"')
+      {
+        state = DEPEND_SAVE;
+        dep = lastword;
+        lastword = "";
+      }
+      else
+      {
+        lastword += c;
+      }
+      break;
+
+    case DEPEND_SAVE:
+    {
+      lst.push_back(dep);
+      dep = "";
+      if (c == ',')
+        state = BEFORE_DEP_NAME;
+      else if (c == ']')
+        state = END_PACKET_DEP;
+    }
+    break;
+
+    case END_PACKET_DEP:
+    {
+      mapAllPAckagesInfo[packet] = lst;
+      if (c == ',')
+        state = START_PACKET;
+      else if (c == '}')
+        state = END;
+      lst.clear();
+    }
+    break;
+
+    case END :
+      break;
+
+  }
+
+}
+void DependenciesResolver::trace ()
+{
+  cout  << " all packages : " << endl;
+  for (std::map<string,STRLIST>::iterator it=mapAllPAckagesInfo.begin(); it!=mapAllPAckagesInfo.end(); ++it)
+  {
+    STRLIST lst = it->second;
+    cout << it->first.c_str() << " => [" ;
+    for (unsigned int  i= 0; i < lst.size(); i++)
+    {
+      cout << lst[i].c_str() ;
+      if (i != lst.size()-1) cout << " ";
+    }
+    cout << "]" << endl;
+  }
+
+  cout  << " ------------------------------------------------" << endl;
+
+  cout  << " all project packages : " << endl << "[";
+  for (unsigned int  i= 0; i < lstProjectPackages.size(); i++)
+  {
+    cout << lstProjectPackages[i].c_str() ;
+    if (i != lstProjectPackages.size()-1) cout << " ";
+  }
+  cout << "]" << endl;
+
+  cout  << " ------------------------------------------------" << endl;
+
+  cout  << " all already installed packages : " << endl << "[";
+  for (unsigned int  i= 0; i < lstInstalledPackages.size(); i++)
+  {
+    cout << lstInstalledPackages[i].c_str() ;
+    if (i != lstInstalledPackages.size()-1) cout << " ";
+  }
+  cout << "]" << endl;
+}
+
+void DependenciesResolver::loadAllPackagesInfo ()
+{
+  string allFile("");
+  string line ("");
+  ifstream myfile (".\\all_packages.json");
+  if (myfile.is_open())
+  {
+    while (getline (myfile, line))
+      allFile += line;
+    myfile.close();
+  }
+  for (unsigned int i = 0; i< allFile.length(); i++)
+    parse( allFile[i] );
+
+
+}
+
+void DependenciesResolver::loadAllPrjPackagesInfo ()
+{
+  string allFile("");
+  string line ("");
+  ifstream myfile (".\\dependencies.json");
+  if (myfile.is_open())
+  {
+    while (getline (myfile, line))
+      allFile += line;
+    myfile.close();
+  }
+  for (unsigned int i = 0; i< allFile.length(); i++)
+    parseDep( allFile[i] );
+
+  //trace();
+}
+
+void DependenciesResolver::loadInstalledPackagesInfo ()
+{
+  string line ("");
+  system ("dir  installed_modules\\*.* /A:D /b > dirs.txt");
+  ifstream myfile (".\\dirs.txt");
+  if (myfile.is_open())
+  {
+    //number of rows
+    while (getline (myfile, line))
+        lstInstalledPackages.push_back (line);
+    myfile.close();
+  }
+  else cout << "Unable to open file "  << endl;
+
+  system ("del /q  dirs.txt");
+
+}
+int main()
+{
+  DependenciesResolver dr;
+  dr.loadInstalledPackagesInfo();
+  dr.loadAllPackagesInfo();
+  dr.loadAllPrjPackagesInfo();
+  dr.trace();
+  return 0;
+}
+
