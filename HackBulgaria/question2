@@ -1,0 +1,302 @@
+#include <string>
+#include <algorithm>
+#include <iostream>
+using namespace std;
+#include "string.h"
+
+#include <iostream>
+#include <fstream>
+
+char  * matrix  = NULL;
+
+// class WordGame implementing word game.
+// Calculates the number of occurrences of a given word in given character matrix
+// Word is allowed to appear
+//    on each row       - in both directions
+//    on each column    - in both directions
+//    on each diagonal  - in both directions
+//Input is possible from the keyboard or from a file provided as a command line argument
+class WordGame
+{
+public:
+  WordGame () : nr(0), nc(0), word(""), matrix (0), line(""){};
+  ~WordGame () {delete []matrix;};
+
+  int play();        //checks for "word" in "matrix"
+  void readData();   //reads data from the keyboard
+  void readDataFromFile (const char * fName); //reads data fr the given file.
+
+private:
+  int nr;        //holds number of rows
+  int nc;        //holds number of cols
+  string word;   //holds word to find
+  char * matrix; //holds the matrix
+  string line;   //working multipurpose variable. countMatchesBothDirections() function bellow looks for "word" occurrences
+
+  int countWordMatchesInLine (const char  * str); // checks for "word" in given string , only left to right
+  int countMatchesBothDirections (); // using countWordMatchesInLine() checks for "word" in "line" both directions
+  int checkRows();       //po redove , prav i obraten zahod
+  int checkColls();      //po coloni , prav i obraten zahod
+  int checkMainDiags();  //po diagonali usporedni na glavnia, prav i obraten zahod
+  int checkSecDiags();   //po diagonali usporedni na vtorichniq, prav i obraten zahod
+  void trace ()          // displays the input
+  {
+    int k = 0;
+    cout << "Word to find        : " << word.c_str() << endl;
+    cout << "The given matrix is : " << endl;
+    cout << "-------------------------------------------------------------" << endl;
+    for (int r = 0; matrix != 0 && r < nr; r++)
+    {
+      for (int c = 0; c < nc; c++)
+        cout << matrix[k++] << ' ';
+
+      cout << endl;
+    }
+    cout << "-------------------------------------------------------------" << endl;
+  }
+
+};
+
+void WordGame::readData()
+{
+  char buff[1000];
+  delete [] matrix;
+
+  cout  << "Enter number of rows    : " ; cin >> nr;cin.ignore(1);
+  cout  << "Enter number of cols    : " ; cin >> nc;cin.ignore(1);
+  cout  << "Enter word to look for  : " ;
+
+  cin.getline(buff, '\n');cin.ignore(1);
+  word = buff;
+
+  cout  << "Enter line by line the matrix [" <<nr<<"][" << nc << "] : " << endl;
+  matrix = new char [nr*nc+1];
+  for (int r = 0; r < nr; r++)
+    cin.getline(matrix + r*nc, '\n');
+  matrix[nr*nc] = 0;
+}
+
+/*
+example of expected format
+5
+4
+ivan
+qinn
+ivan
+ivvn
+ifit
+erta
+*/
+void WordGame::readDataFromFile (const char * fName)
+{
+  ifstream myfile (fName);
+  delete [] matrix;
+
+  if (myfile.is_open())
+  {
+    //number of rows
+    getline (myfile, line);
+    nr = atoi(line.c_str());
+
+    //number of cols
+    getline (myfile, line);
+    nc = atoi(line.c_str());
+
+    //word to look for
+    getline (myfile, word);
+
+    matrix = new char [nr*nc+1];
+    memset (matrix, 0, nr*nc+1);
+
+    //matrix
+    int r = 0;
+    while ( getline (myfile, line) )
+    {
+      memcpy(matrix + r*nc, line.c_str(), nc);
+      ++r;
+    }
+    myfile.close();
+  }
+  else cout << "Unable to open file " << fName << endl;
+
+  line = "";
+}
+
+int WordGame::countWordMatchesInLine (const char  * str)
+{
+  int result = 0;
+  const char * p = str;
+  const char * pEnd  = str + strlen(str);
+
+  while ( (p < pEnd) && (strlen(p) >= word.length()) )
+  {
+    char * m = strstr(p, word.c_str());
+    if (m)
+    {
+      p = m +(strlen(word.c_str()));
+      ++result;
+    }
+    else
+     p = pEnd;
+  }
+  return result;
+}
+
+int WordGame::countMatchesBothDirections ()
+{
+   int result  = 0;
+   result  += countWordMatchesInLine(line.c_str());
+   //reverse the line and check for right to left occurrences
+   reverse(line.begin(), line.end());
+   result   += countWordMatchesInLine(line.c_str());
+   return result ;
+}
+
+
+//po redove , prav i obraten zahod
+int WordGame::checkRows()
+{
+  int result = 0;
+  for (int r = 0; r < nr; r++)
+  {
+    string s (matrix + r*nc, nc);
+    line = s;
+    result += countMatchesBothDirections();
+  }
+  return result;
+}
+
+//po coloni , prav i obraten zahod
+int WordGame::checkColls()
+{
+  int result = 0;
+  for (int c = 0; c < nc; c++)
+  {
+    line  = "";
+    for (int r = 0; r < nr; r++)
+      line = line + matrix[r*nc + c];
+
+    result += countMatchesBothDirections();
+  }
+  return result;
+}
+
+//po diagonali usporedni na glavnia, prav i obraten zahod
+int WordGame::checkMainDiags()
+{
+/*
+indexes:
+00 11 22 33
+01 12 23
+02 13
+03
+*/
+  int result = 0;
+  for (int sc = 0; sc < nc; sc++)
+  {
+    line = "";
+    int r =0;
+    for(int c = sc; c<nc; c++)
+      line = line + matrix[(r++)*nc + c];
+
+    result += countMatchesBothDirections();
+    if (line.length() <= word.length())
+      break;
+
+  }
+
+/*
+indexes:
+10 21 32 43
+20 31 42
+30 41
+40
+*/
+  for (int sr = 1; sr < nr; sr++)
+  {
+    line = "";
+    int c =0;
+    for(int r = sr; r<nr; r++)
+      line = line + matrix[r*nc + c++];
+
+    result += countMatchesBothDirections();
+    if (line.length() <= word.length())
+      break;
+  }
+  return result;
+}
+
+//po diagonali usporedni na vtorichniq, prav i obraten zahod
+int WordGame::checkSecDiags()
+{
+  int result = 0;
+
+/*
+indexes:
+03 12 21 30
+02 11 20
+01 10
+00
+*/
+
+  for (int sc = nc - 1; sc >= 0; sc--)
+  {
+    line = "";
+    int r =0;
+    for (int c = sc; c >= 0; c--)
+        line += matrix[(r++)*nc + c];
+    result += countMatchesBothDirections();
+
+    if (line.length() <= word.length())
+      break;
+  }
+
+
+/*
+indexes:
+13 22 31 04
+23 32 41
+33 42
+43
+*/
+  for (int sr =  1; sr < nr; sr++)
+  {
+    line = "";
+    int c = nc-1;
+    for (int r = sr; r  < nr; r++)
+        line += matrix[r*nc + c--];
+
+    result += countMatchesBothDirections();
+    if (line.length() <= word.length())
+      break;
+  }
+  return result;
+}
+
+int WordGame::play()
+{
+  trace();
+  int result = checkRows();       //po redove , prav i obraten zahod
+  result += checkColls();         //po coloni , prav i obraten zahod
+  result += checkMainDiags();     //po diagonali usporedni na glavnia, prav i obraten zahod
+  result += checkSecDiags();      //po diagonali usporedni na vtorichniq, prav i obraten zahod
+
+  cout << "Number of matches of  " << word.c_str() << " in given matrix is " << result << endl << endl;
+
+  return result;
+
+}
+int main(int argc, char** argv)
+{
+  WordGame wg;
+  if (argc >1 )
+    wg.readDataFromFile(argv[1]);
+  else
+    wg.readData(); //default
+  int cnt = wg.play();
+
+  return 0;
+}
+
+
+
