@@ -445,8 +445,6 @@ bool DependenciesResolver::isInstalled (const char * pckgName)
 //install one [project] package with the tree of its dependencies.
 //Do not install already installed packages
 //respect dependencies order
-
-  
 void DependenciesResolver::installPackage(const char * pckgName, int numTabs)
 {
   string tabs (numTabs, '\t');
