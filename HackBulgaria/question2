@@ -19,7 +19,7 @@ char  * matrix  = NULL;
 class WordGame
 {
 public:
-  WordGame () : nr(0), nc(0), word(""), matrix (0), line(""){};
+  WordGame () : nr(0), nc(0), word(""), matrix (0), line(""), isPalindrom(false){};
   ~WordGame () {delete []matrix;};
 
   int play();        //checks for "word" in "matrix"
@@ -32,7 +32,9 @@ private:
   string word;   //holds word to find
   char * matrix; //holds the matrix
   string line;   //working multipurpose variable. countMatchesBothDirections() function bellow looks for "word" occurrences
+  bool isPalindrom;
 
+  void checkPalindrom(const char * wrd);
   int countWordMatchesInLine (const char  * str); // checks for "word" in given string , only left to right
   int countMatchesBothDirections (); // using countWordMatchesInLine() checks for "word" in "line" both directions
   int checkRows();       //po redove , prav i obraten zahod
@@ -56,6 +58,16 @@ private:
   }
 
 };
+
+void WordGame::checkPalindrom(const char * wrd)
+{
+    string s1(wrd);
+    string s2(wrd);
+
+    reverse(s2.begin(), s2.end());
+
+    isPalindrom = s1 == s2;
+}
 
 void WordGame::readData()
 {
@@ -144,12 +156,15 @@ int WordGame::countWordMatchesInLine (const char  * str)
 
 int WordGame::countMatchesBothDirections ()
 {
-   int result  = 0;
-   result  += countWordMatchesInLine(line.c_str());
-   //reverse the line and check for right to left occurrences
-   reverse(line.begin(), line.end());
-   result   += countWordMatchesInLine(line.c_str());
-   return result ;
+  int result  = 0;
+  result  += countWordMatchesInLine(line.c_str());
+  //reverse the line and check for right to left occurrences
+  if(!isPalindrom)
+  {
+    reverse(line.begin(), line.end());
+    result   += countWordMatchesInLine(line.c_str());
+  }
+  return result ;
 }
 
 
@@ -275,8 +290,11 @@ indexes:
 
 int WordGame::play()
 {
+  int result = 0;
+
   trace();
-  int result = checkRows();       //po redove , prav i obraten zahod
+  checkPalindrom(word.c_str());
+  result += checkRows();       //po redove , prav i obraten zahod
   result += checkColls();         //po coloni , prav i obraten zahod
   result += checkMainDiags();     //po diagonali usporedni na glavnia, prav i obraten zahod
   result += checkSecDiags();      //po diagonali usporedni na vtorichniq, prav i obraten zahod
@@ -284,8 +302,8 @@ int WordGame::play()
   cout << "Number of matches of  " << word.c_str() << " in given matrix is " << result << endl << endl;
 
   return result;
-
 }
+
 int main(int argc, char** argv)
 {
   WordGame wg;
@@ -297,6 +315,11 @@ int main(int argc, char** argv)
 
   return 0;
 }
+
+
+
+
+
 
 
 
