@@ -1,0 +1,498 @@
+
+
+
+#include <string>
+#include <algorithm>
+
+#include <iostream>
+#include <fstream>
+
+#include <vector>
+#include <map>
+
+using namespace std;
+
+typedef vector<string> STRLIST;
+
+class DependenciesResolver
+{
+public:
+
+enum PARSE_ALL_DEP_STATES
+{
+  BEGIN,
+  START_PACKET,
+  READ_PACKET_NAME,
+  SAVE_PACKET_NAME,
+  READ_PACKET_DEPS,
+  BEFORE_DEP_NAME,
+  READ_DEP,
+  DEPEND_SAVE,
+  END_PACKET_DEP,
+  END
+};
+
+enum PARSE_PRJ_STATES
+{
+    BEGIN_PARSE_PRJ,
+    START_PRJ_KW,
+    READ_PRJ_KW,
+    CHECK_PRJ_KW,
+    START_PRJ_NAME,
+    READ_PRJ_NAME,
+    SAVE_PRJ_NAME,
+    START_DEP_KW,
+    READ_DEP_KW,
+    CHECK_DEP_KW,
+    ENTER_PRJ_DEP,
+    START_PRJ_DEP,
+    READ_ONE_PRJ_DEP,
+    SAVE_ONE_PRJ_DEP,
+    END_PRJ,
+    END_PARS_PRJ
+};
+
+  DependenciesResolver () : state(BEGIN), prj_state(BEGIN_PARSE_PRJ) {uninstallModules ();};
+  ~DependenciesResolver() {}
+
+  void parse (char c);
+  void parseDep (char c);
+  void loadInstalledPackagesInfo ();
+  void loadAllPackagesInfo ();
+  void loadAllPrjPackagesInfo ();
+
+  bool isInstalled(const char * pckgName);
+  void installPackage(const char * pckgName);
+  void installPackage(const char * pckgName, int numTabs);
+  void uninstallModules ();
+
+  STRLIST lstInstalledPackages;
+  STRLIST lstProjectPackages;
+
+  map<string, STRLIST > mapAllPAckagesInfo;
+  PARSE_ALL_DEP_STATES state;
+  PARSE_PRJ_STATES    prj_state;
+
+  string lastword;
+  void trace ();
+};
+
+void DependenciesResolver::uninstallModules ()
+{
+    system ("rmdir /s /q .\\installed_modules\\backbone ");
+    system ("rmdir /s /q .\\installed_modules\\jQuery");
+    system ("rmdir /s /q .\\installed_modules\\queryJ");
+    system ("rmdir /s /q .\\installed_modules\\underscore");
+}
+
+/*
+{
+  "projectName": "Test0000",
+  "dependencies": ["backbone"]
+}
+state machine with its states and triggers
+BEGIN_PARSE_PRJ   {     => START_PRJ_KW
+START_PRJ_KW      "     => READ_PRJ_KW
+READ_PRJ_KW       "     => CHECK_PRJ_KW // is "projectName"
+CHECK_PRJ_KW     false  => END
+CHECK_PRJ_KW      :     => START_PRJ_NAME
+START_PRJ_NAME    "     => READ_PRJ_NAME
+READ_PRJ_NAME     "     => SAVE_PRJ_NAME
+SAVE_PRJ_NAME     ,     => START_DEP_KW
+START_DEP_KW      "     => READ_DEP_KW
+READ_DEP_KW       "     => CHECK_DEP_KW // is "dependencies"
+CHECK_DEP_KW     false  => END
+CHECK_DEP_KW      :     => ENTER_PRJ_DEP
+ENTER_PRJ_DEP     [     => START_PRJ_DEP
+START_PRJ_DEP     "     => READ_ONE_PRJ_DEP
+READ_ONE_PRJ_DEP  "     => SAVE_ONE_PRJ_DEP
+SAVE_ONE_PRJ_DEP  ,     => START_PRJ_DEP
+SAVE_ONE_PRJ_DEP  ]     => END_PRJ
+END_PRJ           ,     => START_PRJ_KW
+END_PRJ           }     => END_PARS_PRJ
+*/
+// fills lstProjectPackages
+void DependenciesResolver::parseDep (char c)
+{
+
+  static STRLIST lst;
+  switch (prj_state)
+  {
+    case BEGIN_PARSE_PRJ :
+        if (c == '{') prj_state  = START_PRJ_KW;
+    break;
+
+    case START_PRJ_KW:
+    {
+        if (c == '"') prj_state  = READ_PRJ_KW;
+        lastword = "";
+    }
+    break;
+
+    case READ_PRJ_KW:
+    {
+        if (c == '"') prj_state  = CHECK_PRJ_KW;
+        else lastword += c;
+    }
+    break;
+
+    case CHECK_PRJ_KW:
+    {
+        if (lastword != "projectName")  prj_state  =  END_PARS_PRJ ;
+        else if (c == ':')              prj_state  =  START_PRJ_NAME;
+
+    }
+    break;
+
+    case START_PRJ_NAME:
+    {
+        lastword = "";
+        if (c == '"') prj_state  = READ_PRJ_NAME;
+    }
+    break;
+
+    case READ_PRJ_NAME:
+        if (c == '"') prj_state  = SAVE_PRJ_NAME;
+    break;
+
+    case SAVE_PRJ_NAME:
+        if (c == ',') prj_state  = START_DEP_KW;
+    break;
+
+    case START_DEP_KW:
+        if (c == '"')
+        {
+            prj_state  = READ_DEP_KW;
+            lastword = "";
+        }
+    break;
+
+    case READ_DEP_KW:
+        if (c == '"')
+        {
+            if (lastword  != "dependencies") prj_state = END_PARS_PRJ ;
+            else                             prj_state = CHECK_DEP_KW;
+            lastword  = "";
+        }
+        else
+            lastword += c;
+    break;
+
+    case CHECK_DEP_KW:
+        if (c == ':') prj_state  = ENTER_PRJ_DEP;
+    break;
+
+    case ENTER_PRJ_DEP:
+        if (c == '[') prj_state  = START_PRJ_DEP;
+    break;
+
+    case START_PRJ_DEP:
+    {
+        lastword  = "";
+        if (c == '"') prj_state  = READ_ONE_PRJ_DEP;
+    }
+    break;
+
+    case READ_ONE_PRJ_DEP:
+        if (c == '"') prj_state  = SAVE_ONE_PRJ_DEP;
+        else lastword  += c;
+    break;
+
+    case SAVE_ONE_PRJ_DEP:
+    {
+        if (lastword.length() > 0) lstProjectPackages.push_back(lastword);
+        lastword = "";
+
+        if (c == ',')      prj_state  = START_PRJ_DEP;
+        else if (c == ']') prj_state  = END_PRJ;
+    }
+    break;
+
+    case END_PRJ:
+        if (c == ',') prj_state  = START_PRJ_KW;
+        else if (c == '}') prj_state  = END_PARS_PRJ;
+    break;
+
+    case END_PARS_PRJ:
+    break;
+  }
+}
+/*
+{
+  "backbone": ["jQuery", "underscore"],
+  "jQuery": ["queryJ"],
+  "underscore": ["lodash"],
+  "queryJ": [],
+  "lodash": []
+}
+
+
+state machine with its states and triggers
+BEGIN            {  => START_PACKET
+START_PACKET     "  => READ_PACKET_NAME
+READ_PACKET_NAME "  => SAVE_PACKET_NAME
+SAVE_PACKET_NAME :  => READ_PACKET_DEPS
+
+READ_PACKET_DEPS [  => BEFORE_DEP_NAME
+BEFORE_DEP_NAME  "  => READ_DEP
+BEFORE_DEP_NAME  ]  => END_PACKET_DEP
+READ_DEP         "  => DEPEND_SAVE
+DEPEND_SAVE      ,  => BEFORE_DEP_NAME
+DEPEND_SAVE      ]  => END_PACKET_DEP
+END_PACKET_DEP   ,  => START_PACKET
+END_PACKET_DEP   }  => END
+*/
+void DependenciesResolver::parse (char c)
+{
+  static string packet = "";
+  static string dep = "";
+  static STRLIST lst;
+  switch (state)
+  {
+    case BEGIN :
+      if (c == '{')
+      {
+                          state = START_PACKET;
+        packet = "";
+        lst.clear();
+      }
+    break;
+
+    case START_PACKET:
+      if (c == '"')
+      {
+                          state = READ_PACKET_NAME;
+        lastword = "";
+      }
+      break;
+
+    case READ_PACKET_NAME:
+      if (c == '"')
+      {
+                          state = SAVE_PACKET_NAME;
+        packet = lastword;
+        lastword = "";
+      }
+      else
+      {
+        lastword += c;
+      }
+      break;
+
+    case SAVE_PACKET_NAME:
+      if (c == ':')       state  = READ_PACKET_DEPS;
+      break;
+
+    case READ_PACKET_DEPS:
+      if (c == '[')       state  = BEFORE_DEP_NAME;
+      break;
+
+    case BEFORE_DEP_NAME:
+      if (c == '"')
+      {
+                          state = READ_DEP;
+        lastword = "";
+      }
+      else if (c == ']')
+      {
+                          state = END_PACKET_DEP;
+      }
+      break;
+
+    case READ_DEP:
+      if (c == '"')
+      {
+                          state = DEPEND_SAVE;
+        dep = lastword;
+        lastword = "";
+      }
+      else
+      {
+        lastword += c;
+      }
+      break;
+
+    case DEPEND_SAVE:
+    {
+      if (dep.length() > 0)
+        lst.push_back(dep);
+      dep = "";
+      if (c == ',')       state = BEFORE_DEP_NAME;
+      else if (c == ']')  state = END_PACKET_DEP;
+    }
+    break;
+
+    case END_PACKET_DEP:
+    {
+      map<string, STRLIST>::iterator it = mapAllPAckagesInfo.find(packet);
+      if (it==mapAllPAckagesInfo.end())
+        mapAllPAckagesInfo[packet] = lst;
+
+      if (c == ',')       state = START_PACKET;
+      else if (c == '}')  state = END;
+      lst.clear();
+    }
+    break;
+
+    case END :
+      break;
+
+  }
+
+}
+void DependenciesResolver::trace ()
+{
+  cout  << " ------------------------------------------------" << endl;
+  cout  << "all packages : " << endl;
+  for (std::map<string,STRLIST>::iterator it=mapAllPAckagesInfo.begin(); it!=mapAllPAckagesInfo.end(); ++it)
+  {
+    STRLIST lst = it->second;
+    cout << it->first.c_str() << " => [" ;
+    for (size_t i= 0; i < lst.size(); i++)
+    {
+      cout << lst[i].c_str() ;
+      if (i != lst.size()-1) cout << " ";
+    }
+    cout << "]" << endl;
+  }
+
+  cout  << " ------------------------------------------------" << endl;
+  cout  << " all project packages : " << endl << "[";
+  for (size_t i= 0; i < lstProjectPackages.size(); i++)
+  {
+    cout << lstProjectPackages[i].c_str() ;
+    if (i != lstProjectPackages.size()-1) cout << " ";
+  }
+  cout << "]" << endl;
+
+  cout  << " ------------------------------------------------" << endl;
+  cout  << " all already installed packages : " << endl << "[";
+  for (size_t i= 0; i < lstInstalledPackages.size(); i++)
+  {
+    cout << lstInstalledPackages[i].c_str() ;
+    if (i != lstInstalledPackages.size()-1) cout << " ";
+  }
+  cout << "]" << endl;
+  cout  << " ------------------------------------------------" << endl;
+
+}
+
+void DependenciesResolver::loadAllPackagesInfo ()
+{
+  string line ("");
+  ifstream myfile (".\\all_packages.json");
+  if (myfile.is_open())
+  {
+    while (getline (myfile, line))
+    {
+        for (size_t i = 0; i< line.length(); i++)
+            parse( line[i] );
+    }
+    myfile.close();
+  }
+}
+
+void DependenciesResolver::loadAllPrjPackagesInfo ()
+{
+  string line ("");
+  ifstream myfile (".\\dependencies.json");
+  if (myfile.is_open())
+  {
+    while (getline (myfile, line))
+    {
+        for (size_t i = 0; i< line.length(); i++)
+            parseDep( line[i] );
+    }
+    myfile.close();
+  }
+}
+
+//using OS dir command make a list of directories under installed_modules
+// the switch /A:D tells dir to report directories only
+// the switch /b tells dir to report no additional information
+// redirecting the output to a file simplifies reading
+void DependenciesResolver::loadInstalledPackagesInfo ()
+{
+  string line ("");
+  system ("dir installed_modules\\*.* /A:D /b > dirs.txt");
+
+  ifstream myfile (".\\dirs.txt");
+  if (myfile.is_open())
+  {
+    while (getline (myfile, line))
+        lstInstalledPackages.push_back (line);
+    myfile.close();
+  }
+  else cout << "Unable to open file "  << endl;
+
+  system ("del /q  dirs.txt");
+
+}
+
+
+//check for a packages among already installed ones
+bool DependenciesResolver::isInstalled (const char * pckgName)
+{
+  bool result = false;
+  for (size_t i= 0; !result && i < lstInstalledPackages.size(); i++)
+  {
+    result = 0 == lstInstalledPackages[i].compare(pckgName) ;
+  }
+
+  return result;
+}
+
+//install one [project] package with the tree of its dependencies.
+//Do not install already installed packages
+//respect dependencies order
+
+  
+void DependenciesResolver::installPackage(const char * pckgName, int numTabs)
+{
+  string tabs (numTabs, '\t');
+
+  if (numTabs > 0)
+    cout << tabs << pckgName << " needed -starting" << endl;
+  else
+    cout << tabs << pckgName << " - starting " << endl;
+
+  if (!isInstalled(pckgName))
+  {
+    STRLIST lst = mapAllPAckagesInfo[pckgName];
+    if (!lst.empty())
+      for (size_t i = 0; i< lst.size(); i++)
+         installPackage(lst[i].c_str(), numTabs + 1);
+
+    string sCmdLine = string("mkdir installed_modules\\") + pckgName;
+    cout << tabs<< pckgName << " - done. " << endl;
+    system( sCmdLine.c_str() );
+    lstInstalledPackages.push_back(pckgName);
+  }
+  else
+    cout << tabs<<pckgName << " already done" << endl;
+
+}
+
+int main()
+{
+  DependenciesResolver dr;
+
+  dr.loadInstalledPackagesInfo();
+  dr.loadAllPackagesInfo();
+  dr.loadAllPrjPackagesInfo();
+
+  dr.trace();
+  cout << "start installing packages" << endl;
+  for (size_t i= 0; i < dr.lstProjectPackages.size(); i++)
+  {
+    dr.installPackage(dr.lstProjectPackages[i].c_str(), 0);
+  }
+  cout << "All done"<<endl;
+
+  //dr.trace();
+
+  return 0;
+}
+
+
+
